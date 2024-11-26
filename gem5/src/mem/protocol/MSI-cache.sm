@@ -42,16 +42,28 @@ machine(L1Cache, "MSI L1 Cache")
     //ECE552: Stable States
     //=====================
 
+
+    M, AccessPermission:Read_Write, desc="Owner of writable data";
+    S, AccessPermission:Read, desc="Have a shared copy of data";
     I, AccessPermission:Invalid, desc="Not Present/Invalid";
 
     /* ECE552: Complete this section here */
-   
+    
     //========================
     //ECE552: Transient States
     //========================
 
     /* ECE552: Complete this section here */
+    
+    IS_D, AccessPermission:Busy, desc="Waiting on data";
+    IM_AD, AccessPermission:Busy, desc="Waiting on data, and acknowledges";
+    IM_A, AccessPermission:Busy, desc="Waiting on acknowledges";
 
+    SI_A, AccessPermission:Busy, desc="Waiting to be able to invalidate";
+    II_A, AccessPermission:Busy, desc="Invalidated self but waiting for dir ack";
+    SM_AD, AccessPermission:Busy, desc="Waiting to become owner of block";
+
+    MI_A, AccessPermission:Busy, desc="Waiting to write back dirty block";
   }
 
   // =============================================================================
@@ -601,6 +613,255 @@ machine(L1Cache, "MSI L1 Cache")
   // =============================================================================
 
   /* ECE552: Complete this section here */
- 
+
+
+  // --------------------------- Steady state --------------------------- // 
+  /* ---- Invalid block (I) ---- */ 
+  transition(I, {Load, Ifetch}, IS_D){
+    v_allocateTBE;              // 1) Allocate a TBE for this transient state
+    as_issueGetS;               // 2) Issue a get request with the dir
+    i_allocateL1CacheBlock;     // 3) Allocate a place in the cache for this block
+    p_profileMiss;              // 4) Record this miss
+    // 5) Dont pop this request - they will have to wait until the transition is complete
+  }
+
+  transition(I, Store, IM_AD){
+    v_allocateTBE;              // 1) Get a TBE to have while your in a transient state
+    am_issueGetM;               // 2) issue a getM to the network
+    i_allocateL1CacheBlock;     // 3) Allocate a cache block to put this in
+    p_profileMiss;              // 4) This was a miss.
+    // 6) Dont pop - they will have to wait until transition is complete
+  }
+
+
+
+  // --------------------------- Transient states --------------------------- //
+  /* ---- IS_D ---- */
+  transition(IS_D, {Load, Ifetch Store, Replacement, Inv}, IS_D){
+    z_stall;                // 1) Dont have the block yet, wait until you finish this transition
+  }
+
+  transition(IS_D, {Data_from_Owner, Data_from_Dir_No_Acks}, S){
+    u_writeDataToCache;     // 1) Copy the data to the alloated space for this block
+    rx_load_hit;            // 2) Tell the CPU core that this block is ready
+    w_deallocateTBE;        // 3) De allocated self TBE
+    n_popResponseQueue;     // 4) We are done with this request
+  }
+  
+
+  /* ---- IM_AD ---- */
+  // Waiting to get a block to M state -> requires (a) data and (b) inv-acks from all cores with this data.
+  transition(IM_AD, {Load, Ifetch, Store, Replacement, Fwd_GetS, Fwd_GetM}, IM_AD ){
+    z_stall;        // 1) Need to wait until we get the block before we service these requests
+    // (Other cores may already be asking for S/M thinking we are the owner already)
+  }
+  transition(IM_AD, {Data_from_Owner, Data_from_Dir_No_Acks, Data_from_Dir_Ack_Cnt_Last}, M){
+    u_writeDataToCache;     // 1) Save recived data to the cache
+    sx_store_hit;           // 2) Tell CPU store is done?
+    w_deallocateTBE;        // 3) De allocated self TBE
+    n_popResponseQueue;     // 4) We are done with this request - no acks required, block sent from owner
+  }
+  transition(IM_AD, {Data_from_Dir_Ack_Cnt}, IM_A){
+    q_updateAckCount;       // 1) Update the ack counter
+    u_writeDataToCache;     // 2) Save the data in the cache
+    n_popResponseQueue;     // 3) Done with this request
+  }
+  transition(IM_AD, {Inv_Ack}, IM_AD){
+    q_updateAckCount;       // 1) Update the ack count.
+    n_popResponseQueue;     // 2) Done with this request
+  }
+
+
+  /* ---- IM_A ---- */
+  // Waiting until ack_count = 0
+  transition(IM_A, {Load, Store, Replacement, CoherenceRequestType:GetS, CoherenceRequestType:GetM}, IM_A ){
+    z_stall;        // same as IM_D - wait until complete this transition before servicing above requests
+  }
+  transition(IM_A, {Inv_Ack}, IM_A){
+    q_updateAckCount;       // 1) Update the ack count.
+    n_popResponseQueue;     // 2) Done with this request
+  }
+  transition(IM_A, {Inv_Ack_all}, M){
+    q_updateAckCount;       // 1) Update the ack count.
+    sx_store_hit;           // 2) Tell CPU store is done?
+    w_deallocateTBE;        // 3) De allocated self TBE - done with this transition.
+    n_popResponseQueue;     // 4) Done with this request
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+  // --------------------------- Steady state --------------------------- //
+  /* ---- Shared block (S) ---- */
+  transition(S, {Load, Ifetch}, S){
+    r_load_hit;                   // 1) Cache hit
+    m_popMandatoryQueue;          // 2) Done with this request
+  }
+  transition(S, Inv, I){
+    h_deallocateL1CacheBlock;     // 1) Invalidate the cache data - someone else wants to own it
+    fi_sendInvAck;                // 2) send a ack
+    forward_eviction_to_cpu;      // 3) tell CPU what happend - was invalidates
+    o_popForwardedRequestQueue;   // 4) Done with request
+  }
+  transition(S, Replacement, SI_A){
+    v_allocateTBE;                // 1) Allocate self in TBE
+    copyDataFromCacheToTBE;       // 2) Copy data to the TBE
+    h_deallocateL1CacheBlock;     // 3) De-allocate self in the cache
+    forward_eviction_to_cpu;      // 4) Tell the CPU what happend - was replaced
+    bs_issuePUTS;                 // 5) send put req - wait for ack
+    // Nothing to pop?
+  }
+  transition(S, Store, SM_AD){
+    v_allocateTBE;                // 1) Allocate self in TBE
+    x_copyDataFromCacheToTBE;     // 2) Save self data in TBE
+    am_issueGetM;                 // 3) Send a req to the dir to get M from dir
+    p_profileMiss;                // 4) Mark this as a miss
+    // 5) Dont pop - will service once block is owned?
+  }
+
+  // --------------------------- Transient states --------------------------- //
+  /* ---- SI_A ---- */
+  transition(SI_A, {Load, Ifetch, Store, Replacement}, SI_A){
+    z_stall;                      // Would reads be hits??
+  }
+  transition(SI_A, Inv, II_A){
+    fi_sendInvAck;                // 1) Send ack to other processor
+    o_popForwardedRequestQueue;   // 2) Done with this request
+  }
+  transition(SI_A, WB_Ack, I){
+    w_deallocateTBE;              // 1) Deallocate yourself
+    n_popResponseQueue;           // 2) Done with this request
+  }
+
+  /* ---- II_A ---- */
+  transition(SI_A, {Load, Ifetch, Store, Replacement}, SI_A){
+    z_stall;
+  }
+  transition(II_A, WB_Ack, I){
+    w_deallocateTBE;            // 1) Done with transition
+    n_popResponseQueue;         // 2) Done with this request
+  }
+
+  /* ---- SM_AD ---- */
+  transition(SM_AD, {Store, Replacement, Fwd_GetS, Fwd_GetM}, SM_AD){
+    z_stall;                    // 1) Must finish transition first
+  }
+  transition(SM_AD, {Load, Ifetch}, SM_AD){
+    r_load_hit;                 // 1) Data is readable - inform CPU
+    m_popMandatoryQueue;        // 2) Done with this request
+  }
+  transition(SM_AD, Inv, IM_AD){
+    fi_sendInvAck;              // 1) Respond that you will invalidate your copy - You did not get ownership
+    am_issueGetM;               // 2) You are now in invalid state - try a getM request
+    o_popForwardedRequestQueue; // 2) Done with this request
+  }
+  transition(SM_AD, {Data_from_Dir_No_Acks, Data_from_Dir_Ack_Cnt_Last}, M){
+    sx_store_hit;               // 1) Tell CPU value is writable
+    w_deallocateTBE;            // 2) deallocate TBE resources
+    n_popResponseQueue;         // 3) Done with this request
+  }
+  transition(SM_AD, Inv_Ack, SM_AD){
+    q_updateAckCount;           // 1) Update the ack count.
+    n_popResponseQueue;         // 2) Done with this request
+  } 
+  transition(SM_AD, Data_from_Dir_Ack_Cnt, SM_A){
+    q_updateAckCount;           // 1) Update the ack count.
+    n_popResponseQueue;         // 2) Done with this request
+  } 
+
+  /* ---- SM_A ---- */
+  transition(SM_A, {Store, Replacement, Fwd_GetS, Fwd_GetM}, SM_A){
+    z_stall;                    // 1) Must finish transition first
+  }
+  transition(SM_A, {Load, Ifetch}, SM_A){
+    r_load_hit;                 // 1) Data is readable - inform CPU
+    m_popMandatoryQueue;        // 2) Done with this request
+  }
+  transition(SM_A, Inv_Ack, SM_A){
+    q_updateAckCount;           // 1) Update the ack count.
+    n_popResponseQueue;         // 2) Done with this request
+  }
+  transition(SM_A, Data_from_Dir_Ack_Cnt_Last, M){
+    sx_store_hit;               // 1) Tell CPU value is writable?
+    w_deallocateTBE;            // 2) deallocate TBE resources
+    n_popResponseQueue;         // 3) Done with this request
+  } 
+
+
+
+
+
+
+
+
+
+  // --------------------------- Steady state --------------------------- //
+  /* ---- Modified/Owned block (M) ---- */
+  transition(M, {Load, Ifetch}, M){
+    r_load_hit;                   // 1) Cache hit
+    m_popMandatoryQueue;          // 2) Done with this request
+  }
+  transition(M, {Store}, M){
+    s_store_hit;                  // 1) Cache hit
+    m_popMandatoryQueue;          // 2) Done with this request
+  }
+  transition(M, {Replacement}, MI_A){
+    bm_issuePUTM;                 // 1) issue a put/writeback request to dir
+    v_allocateTBE;                // 2) Allocate a TBE for self
+    x_copyDataFromCacheToTBE;     // 3) Save the evicted data
+    d_deallocateL1CacheBlock;     // 2) Get rid of this block in the cache
+    forward_eviction_to_cpu;      // 3) Tell CPU - block has been evicted
+    // No pop?
+  }
+  transition(M, {Fwd_GetS}, S){
+    e_sendDataFromCacheToRequestor;   // 1) Send the data from the Cache to the requestor
+    de_sendDataFromCacheToDir;        // 2) Also send to the dir
+    o_popForwardedRequestQueue;       // 3) Done with this request
+  }
+  transition(M, {Fwd_GetM}, II_A){
+    e_sendDataFromCacheToRequestor;   // 1) Send the data from the Cache to the requestor
+    v_allocateTBE;                    // 2) Allocate a TBE for self
+    x_copyDataFromCacheToTBE;         // 3) Save evicted block - maybe not nessasary
+    d_deallocateL1CacheBlock;         // 4) De-allocate from the cache
+    forward_eviction_to_cpu;          // 5) Tell CPU block has been invalidated
+    o_popForwardedRequestQueue;       // 6) Done with this request
+  }
+
+
+  /* ---- MI_A ---- */
+  transition(MI_A, {Load, Ifetch, Store}, MI_A){
+    z_stall;                          // 1) Wait until this is done with its transition
+  }
+  transition(MI_A, {WB_Ack}, I){
+    w_deallocateTBE;                  // 1) Done with the transition
+    o_popForwardedRequestQueue;       // 2) Done with this request cleanly
+  }
+  transition(MI_A, {Fwd_GetS}, SI_A){
+    ee_sendDataFromTBEToRequestor;    // 1) Send the data from the TB to the requestor
+    dee_sendDataFromTBEToDir;         // 2) Also send to the dir
+    o_popForwardedRequestQueue;       // 3) Done with this request
+  }
+  transition(MI_A, {Fwd_GetM}, II_A){
+    ee_sendDataFromTBEToRequestor;    // 1) Send the data from the TB to the requestor
+    o_popForwardedRequestQueue;       // 3) Done with this request
+  }
+
+
+
+
+
+
+
+
+
 
 }
+
