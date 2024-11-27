@@ -621,17 +621,15 @@ machine(L1Cache, "MSI L1 Cache")
   transition(I, {Load, Ifetch}, IS_D){
     v_allocateTBE;              // 1) Allocate a TBE for this transient state
     as_issueGetS;               // 2) Issue a get request with the dir
-    i_allocateL1CacheBlock;     // 3) Allocate a place in the cache for this block
-    p_profileMiss;              // 4) Record this miss
-    // 5) Dont pop this request - they will have to wait until the transition is complete
+    p_profileMiss;              // 3) Record this miss
+    m_popMandatoryQueue;        // 4) Done with this request - will send msg to core when its ready
   }
 
   transition(I, Store, IM_AD){
     v_allocateTBE;              // 1) Get a TBE to have while your in a transient state
     am_issueGetM;               // 2) issue a getM to the network
-    i_allocateL1CacheBlock;     // 3) Allocate a cache block to put this in
-    p_profileMiss;              // 4) This was a miss.
-    // 6) Dont pop - they will have to wait until transition is complete
+    p_profileMiss;              // 3) This was a miss.
+    m_popMandatoryQueue;        // 4) Done with this request - will send message to core when its ready
   }
 
 
@@ -643,10 +641,11 @@ machine(L1Cache, "MSI L1 Cache")
   }
 
   transition(IS_D, {Data_from_Owner, Data_from_Dir_No_Acks}, S){
-    u_writeDataToCache;     // 1) Copy the data to the alloated space for this block
-    rx_load_hit;            // 2) Tell the CPU core that this block is ready
-    w_deallocateTBE;        // 3) De allocated self TBE
-    n_popResponseQueue;     // 4) We are done with this request
+    i_allocateL1CacheBlock; // 1) Allocate a cache block for this
+    u_writeDataToCache;     // 2) Copy the data to the alloated space for this block
+    rx_load_hit;            // 3) Tell the CPU core that this block is ready
+    w_deallocateTBE;        // 4) De allocated self TBE
+    n_popResponseQueue;     // 5) We are done with this request
   }
   
 
@@ -657,15 +656,17 @@ machine(L1Cache, "MSI L1 Cache")
     // (Other cores may already be asking for S/M thinking we are the owner already)
   }
   transition(IM_AD, {Data_from_Owner, Data_from_Dir_No_Acks, Data_from_Dir_Ack_Cnt_Last}, M){
-    u_writeDataToCache;     // 1) Save recived data to the cache
-    sx_store_hit;           // 2) Tell CPU store is done?
-    w_deallocateTBE;        // 3) De allocated self TBE
-    n_popResponseQueue;     // 4) We are done with this request - no acks required, block sent from owner
+    i_allocateL1CacheBlock; // 1) Allocate a cache block for this
+    u_writeDataToCache;     // 2) Save recived data to the cache
+    sx_store_hit;           // 3) Tell CPU store is done?
+    w_deallocateTBE;        // 4) De allocated self TBE
+    n_popResponseQueue;     // 5) We are done with this request - no acks required, block sent from owner
   }
   transition(IM_AD, {Data_from_Dir_Ack_Cnt}, IM_A){
-    q_updateAckCount;       // 1) Update the ack counter
-    u_writeDataToCache;     // 2) Save the data in the cache
-    n_popResponseQueue;     // 3) Done with this request
+    i_allocateL1CacheBlock; // 1) Allocate a cache block for this
+    q_updateAckCount;       // 2) Update the ack counter
+    u_writeDataToCache;     // 3) Save the data in the cache
+    n_popResponseQueue;     // 4) Done with this request
   }
   transition(IM_AD, {Inv_Ack}, IM_AD){
     q_updateAckCount;       // 1) Update the ack count.
@@ -725,7 +726,7 @@ machine(L1Cache, "MSI L1 Cache")
     x_copyDataFromCacheToTBE;     // 2) Save self data in TBE
     am_issueGetM;                 // 3) Send a req to the dir to get M from dir
     p_profileMiss;                // 4) Mark this as a miss
-    // 5) Dont pop - will service once block is owned?
+    m_popMandatoryQueue;          // 5) Done with this request
   }
 
   // --------------------------- Transient states --------------------------- //
@@ -760,9 +761,10 @@ machine(L1Cache, "MSI L1 Cache")
     m_popMandatoryQueue;        // 2) Done with this request
   }
   transition(SM_AD, Inv, IM_AD){
-    fi_sendInvAck;              // 1) Respond that you will invalidate your copy - You did not get ownership
-    am_issueGetM;               // 2) You are now in invalid state - try a getM request
-    o_popForwardedRequestQueue; // 2) Done with this request
+    h_deallocateL1CacheBlock;   // 1) Deallocate self cache block
+    fi_sendInvAck;              // 2) Respond that you will invalidate your copy - You did not get ownership
+    am_issueGetM;               // 3) You are now in invalid state - try a getM request
+    o_popForwardedRequestQueue; // 4) Done with this request
   }
   transition(SM_AD, {Data_from_Dir_No_Acks, Data_from_Dir_Ack_Cnt_Last}, M){
     sx_store_hit;               // 1) Tell CPU value is writable
