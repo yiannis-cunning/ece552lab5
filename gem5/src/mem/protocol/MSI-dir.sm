@@ -580,7 +580,7 @@ getDirectoryEntry(address).Sharers);
     z_stall;                      // 1) Wait until you get the data before servicing
   }
 
-  transition(IM_D, {Memory_Data}, S){
+  transition(IM_D, {Memory_Data}, M){
     d_sendData;                   // 1) Send the data that was recived from mem
     w_deallocateTBE;              // 2) Going to steady state
     qm_popMemQueue;               // 3) Done with this request
