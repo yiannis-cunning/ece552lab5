@@ -44,7 +44,7 @@ machine(L1Cache, "MSI L1 Cache")
 
 
     M, AccessPermission:Read_Write, desc="Owner of writable data";
-    S, AccessPermission:Read, desc="Have a shared copy of data";
+    S, AccessPermission:Read_Only, desc="Have a shared copy of data";
     I, AccessPermission:Invalid, desc="Not Present/Invalid";
 
     /* ECE552: Complete this section here */
@@ -62,6 +62,7 @@ machine(L1Cache, "MSI L1 Cache")
     SI_A, AccessPermission:Busy, desc="Waiting to be able to invalidate";
     II_A, AccessPermission:Busy, desc="Invalidated self but waiting for dir ack";
     SM_AD, AccessPermission:Busy, desc="Waiting to become owner of block";
+    SM_A, AccessPermission:Busy, desc="Waiting for other blocks to inv their copy";
 
     MI_A, AccessPermission:Busy, desc="Waiting to write back dirty block";
   }
@@ -674,7 +675,7 @@ machine(L1Cache, "MSI L1 Cache")
 
   /* ---- IM_A ---- */
   // Waiting until ack_count = 0
-  transition(IM_A, {Load, Store, Replacement, CoherenceRequestType:GetS, CoherenceRequestType:GetM}, IM_A ){
+  transition(IM_A, {Load, Store, Replacement, Fwd_GetS, Fwd_GetM}, IM_A ){
     z_stall;        // same as IM_D - wait until complete this transition before servicing above requests
   }
   transition(IM_A, {Inv_Ack}, IM_A){
@@ -713,7 +714,7 @@ machine(L1Cache, "MSI L1 Cache")
   }
   transition(S, Replacement, SI_A){
     v_allocateTBE;                // 1) Allocate self in TBE
-    copyDataFromCacheToTBE;       // 2) Copy data to the TBE
+    x_copyDataFromCacheToTBE;     // 2) Copy data to the TBE
     h_deallocateL1CacheBlock;     // 3) De-allocate self in the cache
     forward_eviction_to_cpu;      // 4) Tell the CPU what happend - was replaced
     bs_issuePUTS;                 // 5) send put req - wait for ack
@@ -742,7 +743,7 @@ machine(L1Cache, "MSI L1 Cache")
   }
 
   /* ---- II_A ---- */
-  transition(SI_A, {Load, Ifetch, Store, Replacement}, SI_A){
+  transition(II_A, {Load, Ifetch, Store, Replacement}, II_A){
     z_stall;
   }
   transition(II_A, WB_Ack, I){
@@ -817,7 +818,7 @@ machine(L1Cache, "MSI L1 Cache")
     bm_issuePUTM;                 // 1) issue a put/writeback request to dir
     v_allocateTBE;                // 2) Allocate a TBE for self
     x_copyDataFromCacheToTBE;     // 3) Save the evicted data
-    d_deallocateL1CacheBlock;     // 2) Get rid of this block in the cache
+    h_deallocateL1CacheBlock;     // 2) Get rid of this block in the cache
     forward_eviction_to_cpu;      // 3) Tell CPU - block has been evicted
     // No pop?
   }
@@ -830,7 +831,7 @@ machine(L1Cache, "MSI L1 Cache")
     e_sendDataFromCacheToRequestor;   // 1) Send the data from the Cache to the requestor
     v_allocateTBE;                    // 2) Allocate a TBE for self
     x_copyDataFromCacheToTBE;         // 3) Save evicted block - maybe not nessasary
-    d_deallocateL1CacheBlock;         // 4) De-allocate from the cache
+    h_deallocateL1CacheBlock;         // 4) De-allocate from the cache
     forward_eviction_to_cpu;          // 5) Tell CPU block has been invalidated
     o_popForwardedRequestQueue;       // 6) Done with this request
   }

@@ -47,6 +47,11 @@ machine(Directory, "Directory protocol")
     //========================
     //ECE552: Transient States
     //========================
+    MS_D, AccessPermission:Busy, desc="Waiting for data from owner core";
+    IS_D, AccessPermission:Busy, desc="Waiting for data from main memory";
+    IM_D, AccessPermission:Busy, desc="Waiting for data from main memory";
+    SI_A, AccessPermission:Busy, desc="Waiting to write back to main memory";
+    MI_A, AccessPermission:Busy, desc="Waiting to write back to main memory";
 
     /* ECE552: Complete this section here */
   }
@@ -542,25 +547,25 @@ getDirectoryEntry(address).Sharers);
   /* ---- Invalid block (I) ---- */ 
   transition(I, {GETS}, IS_D){
     ars1_addRequestorToSharers;     // 1) Add the requestor to be a sharer
-    qf_queueMemoryFetchRequest;     // 2) Get the data from memory
-    vv_allocateTBEFromRequestNet;   // 3) Allocate a TBE
+    vv_allocateTBEFromRequestNet;   // 2) Allocate a TBE
+    qf_queueMemoryFetchRequest;     // 3) Get the data from memory
     i_popIncomingRequestQueue;      // 4) Done with this request -> Data will be forwarded when it gets here
   }
   transition(I, {GETM}, IM_D){
     e_ownerIsRequestor;             // 1) Add the requestor to be a owner
-    qf_queueMemoryFetchRequest;     // 2) Get the data from memory
-    vv_allocateTBEFromRequestNet;   // 3) Allocate a TBE
+    vv_allocateTBEFromRequestNet;   // 2) Allocate a TBE
+    qf_queueMemoryFetchRequest;     // 3) Get the data from memory
     i_popIncomingRequestQueue;      // 4) Done with this request -> Data will be forwarded when it gets here
   }
   transition(I, {PUTS_NotLast, PUTS_Last, PUTM_NotOwner}, I){
-    a_sendWriteBackAck;             // 1) Block is already invalid
+    a_sendWriteBackAck;             // 1) Block is already invalid ?
     i_popIncomingRequestQueue;      // 2) Done with this request
   }
   
 
   // --------------------------- Transient states --------------------------- //
   /* ---- IS_D ---- */
-  transition(IS_D, {GETM, GETS,}, IS_D){
+  transition(IS_D, {GETM, GETS}, IS_D){
     z_stall;                      // 1) Wait until you get the data before servicing
   }
 
@@ -569,6 +574,7 @@ getDirectoryEntry(address).Sharers);
     w_deallocateTBE;              // 2) Going to steady state
     qm_popMemQueue;               // 3) Done with this request
   }
+
   /* ---- IM_D ---- */
   transition(IM_D, {GETM, GETS,}, IM_D){
     z_stall;                      // 1) Wait until you get the data before servicing
@@ -600,7 +606,7 @@ getDirectoryEntry(address).Sharers);
     i_popIncomingRequestQueue;    // 3) Done with this request
   }
   transition(S, {PUTS_Last}, SI_A){
-    v_allocateTBE;                // 1) Allocate TBE for this request
+    vv_allocateTBEFromRequestNet; // 1) Allocate TBE for this request
     kk_removeRequestSharer;       // 2) Remove the requestor from shared list
     lq_queueMemoryWBRequest;      // 3) Writeback to main memory
     i_popIncomingRequestQueue;    // 3) Done with this request - will send the ack when the ack comes from mem
@@ -612,9 +618,10 @@ getDirectoryEntry(address).Sharers);
   }
   transition(S, {GETM}, M){
     ds2_sendSharedData;           // 1) Send back requestor data + ackcount
-    cs_clearSharers;              // 2) Not more sharers for modified block
+    cs_clearSharers;              // 2) No more sharers for modified block
     e_ownerIsRequestor;           // 3) Set the requestor as the new owner
     fwm_sendFwdInvToSharersMinusRequestor;    // 4) Request all other cores to invalidate
+    i_popIncomingRequestQueue;    // 4) Done with this request
   }
 
 
@@ -645,13 +652,60 @@ getDirectoryEntry(address).Sharers);
     // Out of date requests?
   }
   
-  transition(M, GetS, S_D){
-    
+  transition(M, GETS, MS_D){
+    f_forwardRequest;              // 1) Forward the getS request to the owner
+    ars2_addRequestorToSharers;    // 2) Add the incomming reqestor to the shared list
+    aos_addOwnertoSharers;         // 3) Add the owner to the sharing list
+    c_clearOwner;                  // 4) Get rid of the old owner as a owner - add them on share list??
+    i_popIncomingRequestQueue;     // 5) Done with this request
   }
 
-  transition(, , ){
-
+  transition(M, GETM, M){
+    f_forwardRequest;              // 1) Fwd getm to the owner
+    e_ownerIsRequestor;            // 2) Requestor is new owner 
+    i_popIncomingRequestQueue;     // 3) Done with this request
   }
 
+  transition(M, PUTM_Owner, MI_A){
+    vv_allocateTBEFromRequestNet;  // 1) Allocate a TBE
+    pl_writeDataToDirectory;       // 2) Save incomming data to dir
+    lq_queueMemoryWBRequest;       // 4) Send the data to the memory
+    i_popIncomingRequestQueue;     // 5) Done with this request
+  }
+
+
+
+  /* ---- MS_D ---- */
+  transition(MS_D, {GETM, GETS}, MS_D){
+    z_stall;                        // 1) Wait until stable state until response
+  }
+
+  transition(MS_D, {PUTS_NotLast, PUTS_Last, PUTM_NotOwner}, MS_D){
+    kk_removeRequestSharer        // 1) Remove the requestor from the share list 
+    a_sendWriteBackAck;           // 2) Send a put ack
+    i_popIncomingRequestQueue;    // 3) Done with this request
+  }
+
+  transition(MS_D, {Data}, S){
+    pl2_writeDataToDirectory;     // 1) Save the data from the owner
+    ds_sendSharedData;            // 2) Forward the shared data - maybe dont need this??
+    pr_popIncomingResponseQueue;  // 3) Done with this request 
+  }
+
+  /* ---- MI_A ---- */
+  transition(MI_A, {GETM, GETS}, MI_A){
+    z_stall;
+  }
+  transition(MI_A, {Memory_Ack}, I){
+    c_clearOwner;                  // 1) Clear all owners
+    cs_clearSharers;               // 2) Clear all shares - not rly nessaasry
+    la_sendWriteBackAck;           // 3) Send writback ack to original requestor
+    w_deallocateTBE;               // 4) Deallocate TBE
+    qm_popMemQueue;                // 5) Done with this request
+  }
 
 }
+
+
+
+
