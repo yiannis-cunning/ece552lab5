@@ -40,6 +40,7 @@ machine(Directory, "Directory protocol")
 
     I, AccessPermission:Invalid, desc="Not Present/Invalid";
     M, AccessPermission:Read_Write, desc="Modified";
+    S, AccessPermission:Read_Only, desc="Shared between cores";
 
     /* ECE552: Complete this section here */
 
@@ -536,6 +537,121 @@ getDirectoryEntry(address).Sharers);
   // =============================================================================
 
   /* ECE552: Complete this section here */
+
+  // --------------------------- Steady state --------------------------- // 
+  /* ---- Invalid block (I) ---- */ 
+  transition(I, {GETS}, IS_D){
+    ars1_addRequestorToSharers;     // 1) Add the requestor to be a sharer
+    qf_queueMemoryFetchRequest;     // 2) Get the data from memory
+    vv_allocateTBEFromRequestNet;   // 3) Allocate a TBE
+    i_popIncomingRequestQueue;      // 4) Done with this request -> Data will be forwarded when it gets here
+  }
+  transition(I, {GETM}, IM_D){
+    e_ownerIsRequestor;             // 1) Add the requestor to be a owner
+    qf_queueMemoryFetchRequest;     // 2) Get the data from memory
+    vv_allocateTBEFromRequestNet;   // 3) Allocate a TBE
+    i_popIncomingRequestQueue;      // 4) Done with this request -> Data will be forwarded when it gets here
+  }
+  transition(I, {PUTS_NotLast, PUTS_Last, PUTM_NotOwner}, I){
+    a_sendWriteBackAck;             // 1) Block is already invalid
+    i_popIncomingRequestQueue;      // 2) Done with this request
+  }
+  
+
+  // --------------------------- Transient states --------------------------- //
+  /* ---- IS_D ---- */
+  transition(IS_D, {GETM, GETS,}, IS_D){
+    z_stall;                      // 1) Wait until you get the data before servicing
+  }
+
+  transition(IS_D, {Memory_Data}, S){
+    d_sendData;                   // 1) Send the data that was recived from mem
+    w_deallocateTBE;              // 2) Going to steady state
+    qm_popMemQueue;               // 3) Done with this request
+  }
+  /* ---- IM_D ---- */
+  transition(IM_D, {GETM, GETS,}, IM_D){
+    z_stall;                      // 1) Wait until you get the data before servicing
+  }
+
+  transition(IM_D, {Memory_Data}, S){
+    d_sendData;                   // 1) Send the data that was recived from mem
+    w_deallocateTBE;              // 2) Going to steady state
+    qm_popMemQueue;               // 3) Done with this request
+  }
+
+
+
+
+
+
+
+
+  // --------------------------- Steady state --------------------------- // 
+  /* ---- Shared block (S) ---- */ 
+  transition(S, {GETS}, S){
+    ars2_addRequestorToSharers;   // 1) Add the requestor to the sharers list
+    ds_sendSharedData;            // 2) Send back shared data
+    i_popIncomingRequestQueue;    // 3) Done with this request
+  }
+  transition(S, {PUTS_NotLast}, S){
+    kk_removeRequestSharer;       // 1) Remove the requestor from shared list
+    a_sendWriteBackAck;           // 2) Send a put ack
+    i_popIncomingRequestQueue;    // 3) Done with this request
+  }
+  transition(S, {PUTS_Last}, SI_A){
+    v_allocateTBE;                // 1) Allocate TBE for this request
+    kk_removeRequestSharer;       // 2) Remove the requestor from shared list
+    lq_queueMemoryWBRequest;      // 3) Writeback to main memory
+    i_popIncomingRequestQueue;    // 3) Done with this request - will send the ack when the ack comes from mem
+  }
+  transition(S, {PUTM_NotOwner}, S){
+    kk_removeRequestSharer;       // 1) Remove the requestor from shared list
+    a_sendWriteBackAck;           // 2) Send a put ack
+    i_popIncomingRequestQueue;    // 3) Done with this request
+  }
+  transition(S, {GETM}, M){
+    ds2_sendSharedData;           // 1) Send back requestor data + ackcount
+    cs_clearSharers;              // 2) Not more sharers for modified block
+    e_ownerIsRequestor;           // 3) Set the requestor as the new owner
+    fwm_sendFwdInvToSharersMinusRequestor;    // 4) Request all other cores to invalidate
+  }
+
+
+
+  // --------------------------- Transient states --------------------------- //
+  /* ---- SI_A ---- */
+  transition(SI_A, {GETM, GETS}, SI_A){
+    z_stall;                    // 1) Wait until this transition is done
+  }
+  transition(SI_A, {Memory_Ack}, I){
+    la_sendWriteBackAck;        // 1) Send WB ack to the requestor
+    w_deallocateTBE;            // 2) Done with this transition
+    qm_popMemQueue;             // 3) Done with this request
+  }
+
+
+
+
+
+
+
+
+  // --------------------------- Steady state --------------------------- // 
+  /* ---- Modified block (M) ---- */ 
+  transition(M, {PUTS_Last, PUTS_NotLast, PUTM_NotOwner} , M){
+    a_sendWriteBackAck;           // 1) Send a put ack
+    i_popIncomingRequestQueue;    // 2) Done with this request
+    // Out of date requests?
+  }
+  
+  transition(M, GetS, S_D){
+    
+  }
+
+  transition(, , ){
+
+  }
 
 
 }
