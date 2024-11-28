@@ -688,7 +688,7 @@ getDirectoryEntry(address).Sharers);
 
   transition(MS_D, {Data}, S){
     pl2_writeDataToDirectory;     // 1) Save the data from the owner
-    ds_sendSharedData;            // 2) Forward the shared data - maybe dont need this??
+    //ds_sendSharedData;            dont need this
     pr_popIncomingResponseQueue;  // 3) Done with this request 
   }
 

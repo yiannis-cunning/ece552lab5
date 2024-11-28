@@ -772,8 +772,8 @@ machine(L1Cache, "MSI L1 Cache")
     z_stall;
   }
   transition(II_A, WB_Ack, I){
-    w_deallocateTBE;            // 1) Done with transition
-    n_popResponseQueue;         // 2) Done with this request
+    w_deallocateTBE;              // 1) Done with transition
+    o_popForwardedRequestQueue;   // 2) Done with this request
   }
 
   /* ---- SM_AD ---- */
@@ -815,7 +815,7 @@ machine(L1Cache, "MSI L1 Cache")
     q_updateAckCount;           // 1) Update the ack count.
     n_popResponseQueue;         // 2) Done with this request
   }
-  transition(SM_A, Data_from_Dir_Ack_Cnt_Last, M){
+  transition(SM_A, Inv_Ack_all, M){
     sx_store_hit;               // 1) Tell CPU value is writable?
     w_deallocateTBE;            // 2) deallocate TBE resources
     n_popResponseQueue;         // 3) Done with this request
@@ -852,10 +852,10 @@ machine(L1Cache, "MSI L1 Cache")
     de_sendDataFromCacheToDir;        // 2) Also send to the dir
     o_popForwardedRequestQueue;       // 3) Done with this request
   }
-  transition(M, {Fwd_GetM}, II_A){
+  transition(M, {Fwd_GetM}, I){
     e_sendDataFromCacheToRequestor;   // 1) Send the data from the Cache to the requestor
-    v_allocateTBE;                    // 2) Allocate a TBE for self
-    x_copyDataFromCacheToTBE;         // 3) Save evicted block - maybe not nessasary
+    //v_allocateTBE;                    // 2) Allocate a TBE for self
+    //x_copyDataFromCacheToTBE;         // 3) Save evicted block - maybe not nessasary
     h_deallocateL1CacheBlock;         // 4) De-allocate from the cache
     forward_eviction_to_cpu;          // 5) Tell CPU block has been invalidated
     o_popForwardedRequestQueue;       // 6) Done with this request
