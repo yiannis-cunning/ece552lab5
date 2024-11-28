@@ -546,7 +546,7 @@ getDirectoryEntry(address).Sharers);
   // --------------------------- Steady state --------------------------- // 
   /* ---- Invalid block (I) ---- */ 
   transition(I, {GETS}, IS_D){
-    ars1_addRequestorToSharers;     // 1) Add the requestor to be a sharer
+    ars2_addRequestorToSharers;     // 1) Add the requestor to be a sharer
     vv_allocateTBEFromRequestNet;   // 2) Allocate a TBE
     qf_queueMemoryFetchRequest;     // 3) Get the data from memory
     i_popIncomingRequestQueue;      // 4) Done with this request -> Data will be forwarded when it gets here
@@ -618,10 +618,10 @@ getDirectoryEntry(address).Sharers);
   }
   transition(S, {GETM}, M){
     ds2_sendSharedData;           // 1) Send back requestor data + ackcount
-    cs_clearSharers;              // 2) No more sharers for modified block
-    e_ownerIsRequestor;           // 3) Set the requestor as the new owner
-    fwm_sendFwdInvToSharersMinusRequestor;    // 4) Request all other cores to invalidate
-    i_popIncomingRequestQueue;    // 4) Done with this request
+    fwm_sendFwdInvToSharersMinusRequestor;    // 2) Request all other cores to invalidate
+    cs_clearSharers;              // 3) No more sharers for modified block
+    e_ownerIsRequestor;           // 4) Set the requestor as the new owner
+    i_popIncomingRequestQueue;    // 5) Done with this request
   }
 
 
