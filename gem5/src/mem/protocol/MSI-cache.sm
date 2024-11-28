@@ -764,7 +764,7 @@ machine(L1Cache, "MSI L1 Cache")
   }
   transition(SI_A, WB_Ack, I){
     w_deallocateTBE;              // 1) Deallocate yourself
-    n_popResponseQueue;           // 2) Done with this request
+    o_popForwardedRequestQueue;   // 2) Done with this request
   }
 
   /* ---- II_A ---- */
@@ -891,3 +891,15 @@ machine(L1Cache, "MSI L1 Cache")
 
 }
 
+
+
+
+/*
+Need to ensure for each transition
+  1) Pops are done to the right queue
+  2) Allocation/deallocation is done in right order
+  3) Transitions match comments
+  4) Type of command used is acting on the right type of data 
+  (example - there is a writeback request for events from queue a vs queue b)
+
+*/
