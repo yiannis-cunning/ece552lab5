@@ -740,9 +740,9 @@ machine(L1Cache, "MSI L1 Cache")
   transition(S, Replacement, SI_A){
     v_allocateTBE;                // 1) Allocate self in TBE
     x_copyDataFromCacheToTBE;     // 2) Copy data to the TBE
-    h_deallocateL1CacheBlock;     // 3) De-allocate self in the cache
-    forward_eviction_to_cpu;      // 4) Tell the CPU what happend - was replaced
-    bs_issuePUTS;                 // 5) send put req - wait for ack
+    bs_issuePUTS;                 // 3) send put req - wait for ack
+    h_deallocateL1CacheBlock;     // 4) De-allocate self in the cache
+    forward_eviction_to_cpu;      // 5) Tell the CPU what happend - was replaced
     // Nothing to pop?
   }
   transition(S, Store, SM_AD){
