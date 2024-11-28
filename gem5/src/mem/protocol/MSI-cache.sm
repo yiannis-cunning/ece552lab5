@@ -786,7 +786,7 @@ machine(L1Cache, "MSI L1 Cache")
   }
   transition(SM_AD, Inv, IM_AD){
     fi_sendInvAck;              // 1) Respond that you will invalidate your copy - You did not get ownership
-    am_issueGetM;               // 2) You are now in invalid state - try a getM request
+    //am_issueGetM;             // 2) Your getM request is stil going -> eventually you will hear back, but you are invalid for now
     o_popForwardedRequestQueue; // 3) Done with this request
   }
   transition(SM_AD, {Data_from_Dir_No_Acks, Data_from_Dir_Ack_Cnt_Last}, M){
@@ -896,10 +896,10 @@ machine(L1Cache, "MSI L1 Cache")
 
 /*
 Need to ensure for each transition
-  1) Pops are done to the right queue
+  1) Pops are done to the right queue                           - Looks good
   2) Allocation/deallocation is done in right order
-  3) Transitions match comments
+  3) Transitions match comments                                 - looks good
   4) Type of command used is acting on the right type of data 
   (example - there is a writeback request for events from queue a vs queue b)
-
+  5) in dir stall on all types of inputs for waiting for mem
 */

@@ -565,7 +565,7 @@ getDirectoryEntry(address).Sharers);
 
   // --------------------------- Transient states --------------------------- //
   /* ---- IS_D ---- */
-  transition(IS_D, {GETM, GETS}, IS_D){
+  transition(IS_D, {GETM, GETS, PUTM_NotOwner, PUTS_NotLast, PUTS_Last, Data}, IS_D){
     z_stall;                      // 1) Wait until you get the data before servicing
   }
 
@@ -576,7 +576,7 @@ getDirectoryEntry(address).Sharers);
   }
 
   /* ---- IM_D ---- */
-  transition(IM_D, {GETM, GETS,}, IM_D){
+  transition(IM_D, {GETM, GETS, PUTM_NotOwner, PUTS_NotLast, PUTS_Last, Data}, IM_D){
     z_stall;                      // 1) Wait until you get the data before servicing
   }
 
@@ -628,7 +628,7 @@ getDirectoryEntry(address).Sharers);
 
   // --------------------------- Transient states --------------------------- //
   /* ---- SI_A ---- */
-  transition(SI_A, {GETM, GETS}, SI_A){
+  transition(SI_A, {GETM, GETS, PUTM_NotOwner, PUTS_NotLast, PUTS_Last, Data}, SI_A){
     z_stall;                    // 1) Wait until this transition is done
   }
   transition(SI_A, {Memory_Ack}, I){
@@ -693,7 +693,7 @@ getDirectoryEntry(address).Sharers);
   }
 
   /* ---- MI_A ---- */
-  transition(MI_A, {GETM, GETS}, MI_A){
+  transition(MI_A, {GETM, GETS, PUTM_NotOwner, PUTS_NotLast, PUTS_Last, Data}, MI_A){
     z_stall;
   }
   transition(MI_A, {Memory_Ack}, I){
