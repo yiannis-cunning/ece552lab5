@@ -43,17 +43,18 @@ machine(L1Cache, "MSI L1 Cache")
     //=====================
 
 
+  /* ECE552: CODE BEGINS HERE */
+
+
     M, AccessPermission:Read_Write, desc="Owner of writable data";
     S, AccessPermission:Read_Only, desc="Have a shared copy of data";
     I, AccessPermission:Invalid, desc="Not Present/Invalid";
 
-    /* ECE552: Complete this section here */
     
     //========================
     //ECE552: Transient States
     //========================
 
-    /* ECE552: Complete this section here */
     
     IS_D, AccessPermission:Busy, desc="Waiting on data";
     IM_AD, AccessPermission:Busy, desc="Waiting on data, and acknowledges";
@@ -65,6 +66,8 @@ machine(L1Cache, "MSI L1 Cache")
     SM_A, AccessPermission:Busy, desc="Waiting for other blocks to inv their copy";
 
     MI_A, AccessPermission:Busy, desc="Waiting to write back dirty block";
+
+    /* ECE552: CODE ENDS HERE */
   }
 
   // =============================================================================
@@ -639,7 +642,7 @@ machine(L1Cache, "MSI L1 Cache")
 
 
   /* ECE552: Complete this section here */
-
+  /* ECE552: CODE BEGINS HERE */
 
   // --------------------------- Steady state --------------------------- // 
   /* ---- Invalid block (I) ---- */ 
@@ -880,7 +883,7 @@ machine(L1Cache, "MSI L1 Cache")
     o_popForwardedRequestQueue;       // 3) Done with this request
   }
 
-
+  /* ECE552: CODE ENDS HERE */
 
 
 

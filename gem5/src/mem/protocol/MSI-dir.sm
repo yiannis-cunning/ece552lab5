@@ -37,12 +37,12 @@ machine(Directory, "Directory protocol")
     //=====================
     //ECE552: Stable States
     //=====================
-
+    /* ECE552: CODE BEGINS HERE */
     I, AccessPermission:Invalid, desc="Not Present/Invalid";
     M, AccessPermission:Read_Write, desc="Modified";
     S, AccessPermission:Read_Only, desc="Shared between cores";
 
-    /* ECE552: Complete this section here */
+
 
     //========================
     //ECE552: Transient States
@@ -53,7 +53,7 @@ machine(Directory, "Directory protocol")
     SI_A, AccessPermission:Busy, desc="Waiting to write back to main memory";
     MI_A, AccessPermission:Busy, desc="Waiting to write back to main memory";
 
-    /* ECE552: Complete this section here */
+    /* ECE552: CODE ENDS HERE */
   }
 
   // =============================================================================
@@ -541,7 +541,7 @@ getDirectoryEntry(address).Sharers);
   // TRANSITIONS
   // =============================================================================
 
-  /* ECE552: Complete this section here */
+  /* ECE552: CODE BEGINS HERE */
 
   // --------------------------- Steady state --------------------------- // 
   /* ---- Invalid block (I) ---- */ 
@@ -703,6 +703,8 @@ getDirectoryEntry(address).Sharers);
     w_deallocateTBE;               // 4) Deallocate TBE
     qm_popMemQueue;                // 5) Done with this request
   }
+
+  /* ECE552: CODE ENDS HERE */
 
 }
 
