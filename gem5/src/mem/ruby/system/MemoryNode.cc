@@ -37,6 +37,5 @@ MemoryNode::print(ostream& out) const
     out << m_time << ", ";
     out << m_msg_counter << ", ";
     out << m_msgptr << "; ";
-    out << m_addr << "; "
     out << "]";
 }

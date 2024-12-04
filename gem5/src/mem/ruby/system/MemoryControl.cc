@@ -299,9 +299,6 @@ MemoryControl::peekNode()
 bool
 MemoryControl::isReady()
 {
-        printf("\nIs not ready!");
-        m_response_queue.front().print(std::cout);
-        printf("timenow? = %d\n", g_eventQueue_ptr->getTime());
     return ((!m_response_queue.empty()) &&
             (m_response_queue.front().m_time <= g_eventQueue_ptr->getTime()));
 }
